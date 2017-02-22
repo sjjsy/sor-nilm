@@ -4,8 +4,15 @@ The repository houses the code related to a student research project related to 
 ## Folders
 
 | Name    | Description                                      | Hidden  |
-| ------- | ---------------------------------------------------------- |
+| ------- | ------------------------------------------------ | ------- |
 | in      | Input data.                                      | Yes     |
 | src     | All source code used in data analysis.           | No      |
 | db      | Databases created for and during data analysis.  | Yes     |
 | out     | Outputs of data analysis.                        | Yes     |
+
+## Contributors
+
+* Mihail Douhaniaris
+* Matias Peljo
+* Johan Salmelin
+* Samuel Marisa
