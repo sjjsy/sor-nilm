@@ -282,6 +282,10 @@ elif action == 'plot':
 
 ### HMM
 elif action == 'hmm':
+  ## Table printer function
+  def print_table(tbl):
+    for row in tbl: # {:>8}
+      print(' '.join('{:>8}'.format(str(cell)) for cell in row))
   ## Implementation of the Viterbi algorithm:
   def viterbi(obs, states, start_p, trans_p, emit_p):
     V = [{}]
@@ -293,15 +297,16 @@ elif action == 'hmm':
       for st in states:
         max_tr_prob = max(V[t-1][prev_st]["prob"]*trans_p[prev_st][st] for prev_st in states)
         for prev_st in states:
-            if V[t-1][prev_st]["prob"] * trans_p[prev_st][st] == max_tr_prob:
-              max_prob = max_tr_prob * emit_p[st][obs[t]]
-              V[t][st] = {"prob": max_prob, "prev": prev_st}
-              break
+          if V[t-1][prev_st]["prob"] * trans_p[prev_st][st] == max_tr_prob:
+            max_prob = max_tr_prob * emit_p[st][obs[t]]
+            V[t][st] = {"prob": max_prob, "prev": prev_st}
+            break
     # Print a table of steps from dictionary    
-    print('Table of steps')
-    print(' '.join(('{:>8}'.format(i)) for i in range(len(V))))
+    tbl = [['steps'] + [str(i) for i in range(len(V))]]
     for state in V[0]:
-      print('{:>8} '.format(state) + ' '.join('{:>8.5f}'.format(v[state]["prob"]) for v in V))
+      tbl.append([state] + ['{:.4f}'.format(v[state]["prob"]) for v in V])
+    print('Computed table of steps:')
+    print_table(tbl)
     opt = []
     # The highest probability
     max_prob = max(value["prob"] for value in V[-1].values())
@@ -316,62 +321,29 @@ elif action == 'hmm':
     for t in range(len(V) - 2, -1, -1):
       opt.insert(0, V[t + 1][previous]["prev"])
       previous = V[t + 1][previous]["prev"]
-    print('The steps of states are ' + ' '.join(opt) + ' with highest probability of %s' % max_prob)
-  ### Data
-  ## Original
-  obs = ('normal', 'cold', 'dizzy')
-  states = ('Healthy', 'Fever')
-  start_p = {'Healthy': 0.6, 'Fever': 0.4}
-  trans_p = {
-     'Healthy' : {'Healthy': 0.7, 'Fever': 0.3},
-     'Fever' : {'Healthy': 0.4, 'Fever': 0.6}
-     }
-  emit_p = {
-     'Healthy' : {'normal': 0.5, 'cold': 0.4, 'dizzy': 0.1},
-     'Fever' : {'normal': 0.1, 'cold': 0.3, 'dizzy': 0.6}
-     }
-  ## Our data
+    print('The most likely state sequence is:')
+    print('  ' + ' -> '.join(opt))
+    print('  Probability: {:.5f}'.format(max_prob))
+  ## Data
   # Observations
   obs = ('jog', 'jog', 'clean', 'sleep', 'jog', 'sleep')
+  # All possible (hidden) states
   states = ('sun', 'rain')
-  # initial start probabilities
+  # Initial start probabilities
   start_p = {'sun': 0.6, 'rain': 0.4}
-  # transition probabilities
+  # Transition probabilities
   trans_p = {
-     'sun' : {'sun': 0.7, 'rain': 0.3},
-     'rain' : {'sun': 0.4, 'rain': 0.6}
-     }
+    'sun' : {'sun': 0.7, 'rain': 0.3},
+    'rain' : {'sun': 0.4, 'rain': 0.6}
+  }
+  # Emission probabilities
   emit_p = {
-     'sun' : {'jog': 0.5, 'clean': 0.4, 'sleep': 0.1},
-     'rain' : {'jog': 0.1, 'clean': 0.3, 'sleep': 0.6}
-     }
-  ## Our data
-#  # Observations
-#  obs = ('low', 'med', 'high', 'med')
-#  states = ('on', 'off') # heater state
-#  # initial start probabilities
-#  start_p = {'on': 0.4, 'off': 0.6}
-#  # transition probabilities
-#  trans_p = {
-#     'on' : {'on': 0.7, 'off': 0.3},
-#     'off' : {'on': 0.4, 'off': 0.6}
-#     }
-#  emit_p = {
-#     'sun' : {'jog': 0.5, 'clean': 0.4, 'sleep': 0.1},
-#     'rain' : {'jog': 0.1, 'clean': 0.3, 'sleep': 0.6}
-#     }
+    'sun' : {'jog': 0.5, 'clean': 0.4, 'sleep': 0.1},
+    'rain' : {'jog': 0.1, 'clean': 0.3, 'sleep': 0.6}
+  }
+  ## Execution
   # Run the algorithm
   viterbi(obs, states, start_p, trans_p, emit_p)
-#  transition_matrix = [
-#    # sun, rain
-#    [ 0.8,  0.2 ], # sun
-#    [ 0.4,  0.6 ], # rain
-#  ]
-#  emission_matrix = [
-#    # jog, rain
-#    [ 0.8,  0.2 ], # sun
-#    [ 0.4,  0.6 ], # rain
-#  ]
 
 ### HELP
 else:
