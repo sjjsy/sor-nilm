@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """analyze.py -- An energy consumption data analyzer
 
 Usage: analyze.py ACTION ARGS
@@ -277,6 +277,10 @@ elif action == 'plot':
     plt.savefig('out/%s.svg' % (mseq.pfdb.stem))
     fig.clear()
     plt.close(fig)
+
+### HMM
+elif action == 'hmm':
+  print("Hello!")
 
 ### HELP
 else:
