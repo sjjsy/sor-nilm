@@ -4,12 +4,14 @@
 Usage: analyze.py ACTION ARGS
 
 Actions:
-  convert CSV_FILES   Converts the given CSV files to DB files by device
-  plot DB_FILES       Plots a graph for each DB file depicting its content
+  convert CSV_FILES   Converts the given CSV files to DB files by device.
+  plot DB_FILES       Plots a graph for each DB file depicting its content.
+  hmm                 Execute our HMM test.
 
 Examples:
   $ src/analyze.py convert in/mdr_2016-03_export_9*.csv
   $ src/analyze.py plot db/D22.db
+  $ src/analyze.py hmm
 """
 
 import sys
@@ -280,7 +282,96 @@ elif action == 'plot':
 
 ### HMM
 elif action == 'hmm':
-  print("Hello!")
+  ## Implementation of the Viterbi algorithm:
+  def viterbi(obs, states, start_p, trans_p, emit_p):
+    V = [{}]
+    for st in states:
+      V[0][st] = {"prob": start_p[st] * emit_p[st][obs[0]], "prev": None}
+    # Run Viterbi when t > 0
+    for t in range(1, len(obs)):
+      V.append({})
+      for st in states:
+        max_tr_prob = max(V[t-1][prev_st]["prob"]*trans_p[prev_st][st] for prev_st in states)
+        for prev_st in states:
+            if V[t-1][prev_st]["prob"] * trans_p[prev_st][st] == max_tr_prob:
+              max_prob = max_tr_prob * emit_p[st][obs[t]]
+              V[t][st] = {"prob": max_prob, "prev": prev_st}
+              break
+    # Print a table of steps from dictionary    
+    print('Table of steps')
+    print(' '.join(('{:>8}'.format(i)) for i in range(len(V))))
+    for state in V[0]:
+      print('{:>8} '.format(state) + ' '.join('{:>8.5f}'.format(v[state]["prob"]) for v in V))
+    opt = []
+    # The highest probability
+    max_prob = max(value["prob"] for value in V[-1].values())
+    previous = None
+    # Get most probable state and its backtrack
+    for st, data in V[-1].items():
+      if data["prob"] == max_prob:
+        opt.append(st)
+        previous = st
+        break
+    # Follow the backtrack till the first observation
+    for t in range(len(V) - 2, -1, -1):
+      opt.insert(0, V[t + 1][previous]["prev"])
+      previous = V[t + 1][previous]["prev"]
+    print('The steps of states are ' + ' '.join(opt) + ' with highest probability of %s' % max_prob)
+  ### Data
+  ## Original
+  obs = ('normal', 'cold', 'dizzy')
+  states = ('Healthy', 'Fever')
+  start_p = {'Healthy': 0.6, 'Fever': 0.4}
+  trans_p = {
+     'Healthy' : {'Healthy': 0.7, 'Fever': 0.3},
+     'Fever' : {'Healthy': 0.4, 'Fever': 0.6}
+     }
+  emit_p = {
+     'Healthy' : {'normal': 0.5, 'cold': 0.4, 'dizzy': 0.1},
+     'Fever' : {'normal': 0.1, 'cold': 0.3, 'dizzy': 0.6}
+     }
+  ## Our data
+  # Observations
+  obs = ('jog', 'jog', 'clean', 'sleep', 'jog', 'sleep')
+  states = ('sun', 'rain')
+  # initial start probabilities
+  start_p = {'sun': 0.6, 'rain': 0.4}
+  # transition probabilities
+  trans_p = {
+     'sun' : {'sun': 0.7, 'rain': 0.3},
+     'rain' : {'sun': 0.4, 'rain': 0.6}
+     }
+  emit_p = {
+     'sun' : {'jog': 0.5, 'clean': 0.4, 'sleep': 0.1},
+     'rain' : {'jog': 0.1, 'clean': 0.3, 'sleep': 0.6}
+     }
+  ## Our data
+#  # Observations
+#  obs = ('low', 'med', 'high', 'med')
+#  states = ('on', 'off') # heater state
+#  # initial start probabilities
+#  start_p = {'on': 0.4, 'off': 0.6}
+#  # transition probabilities
+#  trans_p = {
+#     'on' : {'on': 0.7, 'off': 0.3},
+#     'off' : {'on': 0.4, 'off': 0.6}
+#     }
+#  emit_p = {
+#     'sun' : {'jog': 0.5, 'clean': 0.4, 'sleep': 0.1},
+#     'rain' : {'jog': 0.1, 'clean': 0.3, 'sleep': 0.6}
+#     }
+  # Run the algorithm
+  viterbi(obs, states, start_p, trans_p, emit_p)
+#  transition_matrix = [
+#    # sun, rain
+#    [ 0.8,  0.2 ], # sun
+#    [ 0.4,  0.6 ], # rain
+#  ]
+#  emission_matrix = [
+#    # jog, rain
+#    [ 0.8,  0.2 ], # sun
+#    [ 0.4,  0.6 ], # rain
+#  ]
 
 ### HELP
 else:
