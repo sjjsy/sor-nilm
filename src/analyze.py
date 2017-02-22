@@ -15,13 +15,9 @@ Examples:
 """
 
 import sys
-import glob
+
 from pathlib import Path
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import matplotlib.ticker as mtckr
-from numpy import arange
 
 def perr(msg):
   print('ERR: %s' % (msg))
@@ -230,6 +226,9 @@ elif action == 'dbvar':
 
 ### PLOTTING
 elif action == 'plot':
+  import matplotlib.pyplot as plt
+  import matplotlib.dates as mdates
+  import matplotlib.ticker as mtckr
   for arg in sys.argv[2:]:
     pfdb = Path(arg)
     if not pfdb.exists():
