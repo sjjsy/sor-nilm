@@ -40,7 +40,7 @@ sigma_theta <- sd(data$S, na.rm = T)*2
 sigma_epsilon <- sd(data$S, na.rm = T)
 
 # Parameters
-Kdag  <- 2 # Number of active appliances + i, i > 0
+Kdag  <- 2 # Number of active appliances + 1
 Z <- matrix(1, nrow(data), (Kdag - 1)) # State matrix
 Z[sample(1:nrow(data), round(0.3*nrow(data))),1] <- 0
 Z <- cbind(Z, matrix(0, nrow(Z), 1))
