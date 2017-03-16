@@ -8,7 +8,7 @@ file <- read.csv("../in/mdr_2016-03_export_99.csv", sep = ";")
 # Data preprocessing ----
 # Check number of different DeviceIDs
 if (length(unique(file$DeviceId)) > 1) {
-  warning("Multiple DeviceIDs in given file.")
+  warning("Multiple DeviceIDs in input file.")
 }
 
 # Store each phase to a separate data frame
@@ -42,11 +42,12 @@ sigma_epsilon <- sd(data$S, na.rm = T)
 # Parameters
 Kdag  <- 2 # Number of active appliances + 1
 Z <- matrix(1, nrow(data), (Kdag - 1)) # State matrix
-Z[sample(1:nrow(data), round(0.3*nrow(data))),1] <- 0
-Z <- cbind(Z, matrix(0, nrow(Z), 1))
+Z[sample(1:nrow(data), round(0.3*nrow(data))),1] <- 0 # Add some zeros
+Z <- cbind(Z, matrix(0, nrow(Z), 1)) # Add empty column
+Y <- data$S # Observed data
 
-mu <- matrix(rbeta(Kdag, alpha/Kdag, 1), 1, Kdag) # State transition probability
-o.mu <- mu[order(mu, decreasing = T)]
+o.mu <- matrix(rbeta(Kdag, alpha/Kdag, 1), 1, Kdag) # State transition probability
+o.mu <- o.mu[order(o.mu, decreasing = T)] # Order state transition probabilities
 b <- matrix(rbeta(Kdag, gamma, delta), 1, Kdag) # State transition probability
 theta <- matrix(rnorm(Kdag, mu_theta, sigma_theta), 1, Kdag) # State levels
 
@@ -72,6 +73,21 @@ fmuk <- function(x, alpha, t, N=10) {
 # Derivative of padding log-distribution for mu_k
 dfmuk <- function(x, alpha, t, N=10) {
   return(alpha*((1-x)^N-1)/x - t/(1-x) + (alpha-1)/x)
+}
+
+# Computation of c's
+cfun <- function(i, j, k, Z) {
+  column <- Z[,k]
+  i.inds <- which(column == i)
+  c.val <- 0
+  for (i.ind in i.inds) {
+    if (i.ind < length(column)) {
+      if (column[i.ind + 1] == j) {
+        c.val <- c.val + 1
+      }
+    }
+  }
+  return(c.val)
 }
 
 # Iterative sampling for NFHMM ----
@@ -128,11 +144,30 @@ while (IterNum > 0) {
   # TODO: Sample Z with blocked Gibbs and run FFBS on each column of Z
   # Note: Z is updated only up to column k <= K*
   # Note: After sampling Z, for any columns k <= K* that are non-active, delete those columns
+  for (k in 1:Kstar) {
+    Z[,k] <- Z[,k]
+  }
   
-  # TODO: Sample theta, mu, b, from their conditionals
+  # Sample theta, mu, b, from their conditionals
+  for (k in 1:ncol(Z)) {
+    
+    # Sample theta
+    sigma_theta_p2 <- (1/sigma_theta^2 + 1/sigma_epsilon^2*sum(Z[,k]))^-1
+    sum1 <- Z[,k]*Y
+    sum2 <- matrix(Z[,-k]) %*% matrix(theta, nrow = 1)[,-k]
+    sum2 <- sum2*Z[,k]
+    mu_theta_g <- sigma_theta_p2*((mu_theta/sigma_theta^2) + (sum1-sum2)/sigma_epsilon^2)
+    sigma_theta_g <- sqrt(sigma_theta_p2)
+    theta[k] <- rnorm(1, mu_theta_g, sigma_theta_g)
+    
+    # TODO: Sample mu_k with ARS due to bounds in beta dist
+    
+    # Sample b
+    b[k] <- rbeta(1, cfun(1,1,k,Z)+gamma,cfun(1,0,k,Z)+1)
+    
+  }
   
   # TODO: Sample alpha, gamma, delta, mu_theta, sigma_theta, sigma_epsilon from their posteriors (conjugacy)
-  
   
   IterNum <- IterNum - 1
 }
