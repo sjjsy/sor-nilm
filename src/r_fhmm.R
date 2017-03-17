@@ -90,6 +90,16 @@ cfun <- function(i, j, k, Z) {
   return(c.val)
 }
 
+# log-functions for new mu's (ARS)
+bmuk <- function(x,ck00,ck01){
+  h <- ck00*log(1-x)+(ck01-1)*log(x)
+  return(h)
+}
+dbmuk <- function(x,ck00,ck01){
+  dh <- -ck00/(1-x)+(ck01-1)/x
+  return(dh)
+}
+
 # Iterative sampling for NFHMM ----
 # Number of iterations
 IterNum <- 100
@@ -162,6 +172,11 @@ while (IterNum > 0) {
     
     # TODO: Sample mu_k with ARS due to bounds in beta dist
     
+    lbmu <- max(o.mu[k+1],0)
+    ubmu <- min(1,o.mu[k-1])
+    o.mu[k] <- ars(n=1,bmuk,dbmuk,x=(ubmu-lbmu)/2,m=1,lb=T,xlb=lbmu,ub=T,xub=ubmu,ck00=cfun(0,0,k,Z),ck01=cfun(0,1,k,Z))
+    
+    
     # Sample b
     b[k] <- rbeta(1, cfun(1,1,k,Z)+gamma,cfun(1,0,k,Z)+1)
     
@@ -170,4 +185,5 @@ while (IterNum > 0) {
   # TODO: Sample alpha, gamma, delta, mu_theta, sigma_theta, sigma_epsilon from their posteriors (conjugacy)
   
   IterNum <- IterNum - 1
-}
+
+  
