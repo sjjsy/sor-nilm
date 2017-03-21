@@ -30,6 +30,9 @@ data[match(f2$ValueTimeStamp, data$ValueTimeStamp),"P2"] <- f2$DataValue
 data[match(f3$ValueTimeStamp, data$ValueTimeStamp),"P3"] <- f3$DataValue
 data[,"S"] <- data[,"P1"] + data[,"P2"] + data[,"P3"]
 
+# Delete empty data rows
+data <- data[-which(is.na(data[,"S"])),]
+
 # Initialize NFHMM parameters ----
 # Hyperparameters
 # TODO: Conjugate priors for hyperparameters (hyperpriors)
@@ -37,7 +40,7 @@ alpha <- 1.5 # mu, beta distribution, strength parameter of IBP
 gamma <- 1.5 # b, beta distribution
 delta <- 1 # b, beta distribution
 mu_theta <- mean(data$S, na.rm = T)
-sigma_theta <- sd(data$S, na.rm = T)*2
+sigma_theta <- sd(data$S, na.rm = T)
 sigma_epsilon <- sd(data$S, na.rm = T)
 
 # Parameters
@@ -88,6 +91,9 @@ cfun <- function(i, j, k, Z) {
       }
     }
   }
+  if (i == 0) {
+    c.val <- c.val + 1 # Because of 0-th dummy column
+  }
   return(c.val)
 }
 
@@ -103,7 +109,7 @@ dbmuk <- function(x,ck00,ck01){
 
 # Iterative sampling for NFHMM ----
 # Number of iterations
-IterNum <- 100
+IterNum <- 1
 while (IterNum > 0) {
   
   # K-active: The number of active appliances
@@ -158,12 +164,11 @@ while (IterNum > 0) {
   for (k in 1:Kstar) {
     W <- matrix(c(1-o.mu[k],o.mu[k],1-b[k],b[k]),byrow = T,nrow=2)
     Z <- BSi(Y,Z,k,W,theta,sigma_epsilon)
-    
-    }
+  }
   
   # Sample theta, mu, b, from their conditionals
-  for (k in 1:ncol(Z)) {
     
+  for (k in 1:Kdag) {
     # Sample theta
     sigma_theta_p2 <- (1/sigma_theta^2 + 1/sigma_epsilon^2*sum(Z[,k]))^-1
     sum1 <- Z[,k]*Y
@@ -172,18 +177,40 @@ while (IterNum > 0) {
     mu_theta_g <- sigma_theta_p2*((mu_theta/sigma_theta^2) + (sum1-sum2)/sigma_epsilon^2)
     sigma_theta_g <- sqrt(sigma_theta_p2)
     theta[k] <- rnorm(1, mu_theta_g, sigma_theta_g)
-    
-    # Sample mu_k with ARS due to bounds in beta dist
-    
-    lbmu <- max(o.mu[k+1],0)
-    ubmu <- min(1,o.mu[k-1])
-    o.mu[k] <- ars(n=1,bmuk,dbmuk,x=(ubmu-lbmu)/2,m=1,lb=T,xlb=lbmu,ub=T,xub=ubmu,ck00=cfun(0,0,k,Z),ck01=cfun(0,1,k,Z))
-    
-    
-    # Sample b
-    b[k] <- rbeta(1, cfun(1,1,k,Z)+gamma,cfun(1,0,k,Z)+1)
-    
   }
+    
+  for (k in 1:(Kdag)) {
+    # Sample mu_k
+    # Find lower and upper bounds
+    if (k == 1) {
+      ubmu <- 1
+    } else {
+      ubmu <- o.mu[k-1]
+    }
+    if (is.na(o.mu[k+1])) {
+      lbmu <- 0
+    } else {
+      lbmu <- o.mu[k+1]
+    }
+    
+    # Compute c's
+    ck00 <- max(cfun(0,0,k,Z)/nrow(Z)*300,1)
+    ck01 <- max(cfun(0,1,k,Z)/nrow(Z)*300,1)
+
+    # Draw mu_k
+    o.mu[k] <- ars(n=1,bmuk,dbmuk,x=(ubmu-lbmu)/2,m=1,lb=T,xlb=lbmu,ub=T,xub=ubmu,ck00=ck00,ck01=ck01)
+  }
+    
+  for (k in 1:Kdag) {
+    # Sample b_k
+    # Compute c's
+    ck11 <- cfun(1,1,k,Z)
+    ck10 <- cfun(1,0,k,Z)
+    
+    # Draw b_k
+    b[k] <- rbeta(1, ck11+gamma,ck10+1)
+  }
+    
   
   # TODO: Sample alpha, gamma, delta, mu_theta, sigma_theta, sigma_epsilon from their posteriors (conjugacy)
   
