@@ -1,6 +1,7 @@
 # Load libraries
 library(stats)
 library(ars)
+source("ffbs.R")
 
 # Read file ----
 file <- read.csv("../in/mdr_2016-03_export_99.csv", sep = ";")
@@ -155,8 +156,10 @@ while (IterNum > 0) {
   # Note: Z is updated only up to column k <= K*
   # Note: After sampling Z, for any columns k <= K* that are non-active, delete those columns
   for (k in 1:Kstar) {
-    Z[,k] <- Z[,k]
-  }
+    W <- matrix(c(1-o.mu[k],o.mu[k],1-b[k],b[k]),byrow = T,nrow=2)
+    Z <- BSi(Y,Z,k,W,theta,sigma_epsilon)
+    
+    }
   
   # Sample theta, mu, b, from their conditionals
   for (k in 1:ncol(Z)) {
@@ -170,7 +173,7 @@ while (IterNum > 0) {
     sigma_theta_g <- sqrt(sigma_theta_p2)
     theta[k] <- rnorm(1, mu_theta_g, sigma_theta_g)
     
-    # TODO: Sample mu_k with ARS due to bounds in beta dist
+    # Sample mu_k with ARS due to bounds in beta dist
     
     lbmu <- max(o.mu[k+1],0)
     ubmu <- min(1,o.mu[k-1])
