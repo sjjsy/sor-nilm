@@ -163,8 +163,11 @@ while (IterNum > 0) {
   # Note: After sampling Z, for any columns k <= K* that are non-active, delete those columns
   for (k in 1:Kstar) {
     W <- matrix(c(1-o.mu[k],o.mu[k],1-b[k],b[k]),byrow = T,nrow=2)
-    Z <- BSi(Y,Z,k,W,theta,sigma_epsilon)
-  }
+
+    Z <- BSi(Y,Z,k,W,theta,sigma=sigma_epsilon,Kact,o.mu)
+    
+    }
+
   
   # Sample theta, mu, b, from their conditionals
     
