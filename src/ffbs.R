@@ -40,7 +40,7 @@ BSi <- function(Y,Z,k,W,theta,sigma,Kact,o.mu){
   
   #Check if k  corresponds to the last active column
   if (k == Kact){
-    mus <- o.mu[which(colSums(Z[,1:k])>0)]
+    mus <- o.mu[which(colSums(matrix(Z[,1:k], nrow = length(Y)))>0)]
     mustar0 <- min(mus[-which(mus==min(mus))])
     mu.coef <- c(mustar0,mustar)
     f.ind <- min(which(Z[,k]==1))
