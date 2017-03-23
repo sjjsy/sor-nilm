@@ -5,7 +5,6 @@ source("ffbs.R")
 
 # Read file ----
 file <- read.csv("../in/mdr_2016-03_export_99.csv", sep = ";")
-
 # Data preprocessing ----
 # Check number of different DeviceIDs
 if (length(unique(file$DeviceId)) > 1) {
@@ -197,11 +196,23 @@ while (IterNum > 0) {
     }
     
     # Compute c's
-    ck00 <- max(cfun(0,0,k,Z)/nrow(Z)*300,1)
-    ck01 <- max(cfun(0,1,k,Z)/nrow(Z)*300,1)
-
-    # Draw mu_k
-    o.mu[k] <- ars(n=1,bmuk,dbmuk,x=(ubmu-lbmu)/2,m=1,lb=T,xlb=lbmu,ub=T,xub=ubmu,ck00=ck00,ck01=ck01)
+    ck00 <- cfun(0,0,k,Z)
+    ck01 <- cfun(0,1,k,Z)
+    
+    # Draw mu_k using inverse grid sampling
+    bound <- seq(lbmu, ubmu, by = 0.0001)
+    dbound <- dbeta(bound,ck01,ck00+1)
+    dbound <- dbound/sum(dbound)
+    cbound <- cumsum(dbound)
+    u <- runif(1)
+    if (u <= cbound[1]) {
+      ind <- 1
+    } else if (u >= cbound[length(cbound)]) {
+      ind <- length(cbound)
+    } else {
+      ind <- min(which(cbound > u))
+    }
+    o.mu[k] <- bound[ind]
   }
     
   for (k in 1:Kdag) {
