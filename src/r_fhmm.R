@@ -165,7 +165,7 @@ while (IterNum > 0) {
     W <- matrix(c(1-o.mu[k],o.mu[k],1-b[k],b[k]),byrow = T,nrow=2)
 
     Z <- BSi(Y,Z,k,W,theta,sigma=sigma_epsilon,Kact,o.mu)
-    
+    Kact <- max(which(colSums(Z) > 0))
     }
 
   
