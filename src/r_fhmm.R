@@ -1,10 +1,10 @@
 # Load libraries
-library(stats)
 library(ars)
 source("ffbs.R")
 
 # Read file ----
 file <- read.csv("../in/mdr_2016-03_export_99.csv", sep = ";")
+
 # Data preprocessing ----
 # Check number of different DeviceIDs
 if (length(unique(file$DeviceId)) > 1) {
@@ -31,6 +31,7 @@ data[,"S"] <- data[,"P1"] + data[,"P2"] + data[,"P3"]
 
 # Delete empty data rows
 data <- data[-which(is.na(data[,"S"])),]
+Y <- data$S # Observations
 
 # Initialize NFHMM parameters ----
 # Hyperparameters
@@ -38,16 +39,15 @@ data <- data[-which(is.na(data[,"S"])),]
 alpha <- 1.5 # mu, beta distribution, strength parameter of IBP
 gamma <- 1.5 # b, beta distribution
 delta <- 1 # b, beta distribution
-mu_theta <- mean(data$S, na.rm = T)
-sigma_theta <- sd(data$S, na.rm = T)
-sigma_epsilon <- sd(data$S, na.rm = T)
+mu_theta <- mean(Y, na.rm = T)*2
+sigma_theta <- sd(Y, na.rm = T)
+sigma_epsilon <- sd(Y, na.rm = T)
 
 # Parameters
 Kdag  <- 2 # Number of active appliances + 1
-Z <- matrix(1, nrow(data), (Kdag - 1)) # State matrix
-Z[sample(1:nrow(data), round(0.3*nrow(data))),1] <- 0 # Add some zeros
+Z <- matrix(1, length(Y), (Kdag - 1)) # State matrix
+Z[sample(1:length(Y), round(0.3*length(Y))),1] <- 0 # Add some zeros
 Z <- cbind(Z, matrix(0, nrow(Z), 1)) # Add empty column
-Y <- data$S # Observed data
 
 o.mu <- matrix(rbeta(Kdag, alpha/Kdag, 1), 1, Kdag) # State transition probability
 o.mu <- o.mu[order(o.mu, decreasing = T)] # Order state transition probabilities
@@ -96,16 +96,6 @@ cfun <- function(i, j, k, Z) {
   return(c.val)
 }
 
-# log-functions for new mu's (ARS)
-bmuk <- function(x,ck00,ck01){
-  h <- ck00*log(1-x)+(ck01-1)*log(x)
-  return(h)
-}
-dbmuk <- function(x,ck00,ck01){
-  dh <- -ck00/(1-x)+(ck01-1)/x
-  return(dh)
-}
-
 # Iterative sampling for NFHMM ----
 # Number of iterations
 IterNum <- 1
@@ -128,7 +118,6 @@ while (IterNum > 0) {
   
   # Expand representations
   while (Kstar >= Kdag) {
-    
     # Sample mu_k with ARS
     # Starting points for ARS
     x <- runif(3, 0, o.mu[length(o.mu)])
@@ -157,21 +146,32 @@ while (IterNum > 0) {
     
   }
   
-  # TODO: Sample Z with blocked Gibbs and run FFBS on each column of Z
+  # Sample Z with blocked Gibbs and run FFBS on each column of Z
   # Note: Z is updated only up to column k <= K*
   # Note: After sampling Z, for any columns k <= K* that are non-active, delete those columns
   for (k in 1:Kstar) {
     W <- matrix(c(1-o.mu[k],o.mu[k],1-b[k],b[k]),byrow = T,nrow=2)
 
-    Z <- BSi(Y,Z,k,W,theta,sigma=sigma_epsilon,Kact,o.mu)
+    Z <- BSi(Y,Z,k,W,theta,sigma_epsilon,Kact,o.mu)
     Kact <- max(which(colSums(Z) > 0))
-    }
+  }
+  
+  # Delete non-active columns for k <= K*
+  nonact <- which(colSums(matrix(Z[,1:Kstar], nrow = length(Y))) == 0)
+  if (length(nonact) > 0) {
+    Z <- Z[,-nonact]
+    o.mu <- o.mu[-nonact]
+    b <- b[-nonact]
+    theta <- theta[-nonact]
+  }
+  
+  # Update K-dagger
+  Kdag <- max(which(colSums(Z) == 0))
 
   
   # Sample theta, mu, b, from their conditionals
-    
+  # Sample theta
   for (k in 1:Kdag) {
-    # Sample theta
     sigma_theta_p2 <- (1/sigma_theta^2 + 1/sigma_epsilon^2*sum(Z[,k]))^-1
     sum1 <- Z[,k]*Y
     sum2 <- matrix(Z[,-k]) %*% matrix(theta, nrow = 1)[,-k]
@@ -181,8 +181,8 @@ while (IterNum > 0) {
     theta[k] <- rnorm(1, mu_theta_g, sigma_theta_g)
   }
     
-  for (k in 1:(Kdag)) {
-    # Sample mu_k
+  # Sample mu_k
+  for (k in 1:(Kdag-1)) {
     # Find lower and upper bounds
     if (k == 1) {
       ubmu <- 1
@@ -214,9 +214,19 @@ while (IterNum > 0) {
     }
     o.mu[k] <- bound[ind]
   }
+  
+  # Sample mu_k for k = K-dagger (ARS)
+  # Starting points for ARS
+  x <- runif(3, 0, o.mu[Kdag-1])
+  x <- x[order(x)]
+  
+  # Sample mu_k
+  o.mu[Kdag] <- ars(1,fmuk,dfmuk,x=x,m=3,lb=T,xlb=0,ub=T,
+              xub=o.mu[Kdag-1],alpha=alpha,t=nrow(Z))
+  
     
+  # Sample b_k
   for (k in 1:Kdag) {
-    # Sample b_k
     # Compute c's
     ck11 <- cfun(1,1,k,Z)
     ck10 <- cfun(1,0,k,Z)

@@ -13,7 +13,7 @@ C_Yt_Xt <- function(Y,Z,t,k,theta,sigma){
 }
 
 FFi <- function(Y,Z,k,W,theta,sigma){
-  N <- C_Yt_Xt(Y,Z,1,k,theta,sigma=sigma)
+  N <- C_Yt_Xt(Y,Z,1,k,theta,sigma)
   FF <- matrix(NA,length(Y),2)
   FF[1,1] <- N[1]*W[1,1]
   FF[1,2] <- N[2]*W[1,2]
@@ -34,7 +34,7 @@ FFi <- function(Y,Z,k,W,theta,sigma){
 
 BSi <- function(Y,Z,k,W,theta,sigma,Kact,o.mu){
   #Forward filtering
-  FF <- FFi(Y,Z,k,W,theta,sigma=sigma)
+  FF <- FFi(Y,Z,k,W,theta,sigma)
   # Calculate multiplier mu^*
   mustar <- o.mu[Kact]
   
