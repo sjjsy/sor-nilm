@@ -6,10 +6,14 @@ source("../src/ffbs.R")
 file <- read.csv("test.csv")
 
 # Segment of file
-data <- file[6000:6050,]
+data <- file[1:500,]
+
+shifter <- function(x, n = 1) {
+  if (n == 0) x else c(tail(x, -n), head(x, n))
+}
 
 # Observed data
-Y <- data$aggregate
+Y <- data$fridge + shifter(data$fridge, 9)*0.65
 
 # Real values of parameters
 theta.real <- matrix(c(1000,2000,500,200),1,4)
@@ -19,20 +23,19 @@ for (col in 1:ncol(Z.real)) {
 }
 
 plot(Y, type = "l")
-plot(Z.real%*%t(theta.real), type = "l")
 
 # Initialize NFHMM parameters ----
 # Hyperparameters
 # TODO: Conjugate priors for hyperparameters (hyperpriors)
-alpha <- 1.5 # mu, beta distribution, strength parameter of IBP
-gamma <- 1.5 # b, beta distribution
+gamma <- 1 # b, beta distribution
+alpha <- 1 # mu, beta distribution, strength parameter of IBP
 delta <- 1 # b, beta distribution
 mu_theta <- mean(Y, na.rm = T)*2
-sigma_theta <- sd(Y, na.rm = T)
-sigma_epsilon <- sd(Y, na.rm = T)
+sigma_epsilon <- sd(Y, na.rm = T)/2
+sigma_theta <- sd(Y, na.rm = T)/4
 
 # Parameters
-Kdag  <- 3 # Number of active appliances + 1
+Kdag  <- 2 # Number of active appliances + 1
 Z <- matrix(1, length(Y), (Kdag - 1)) # State matrix
 Z[sample(1:length(Y), round(0.3*length(Y))),1] <- 0 # Add some zeros
 Z <- cbind(Z, matrix(0, nrow(Z), 1)) # Add empty column
@@ -86,7 +89,7 @@ cfun <- function(i, j, k, Z) {
 
 # Iterative sampling for NFHMM ----
 # Number of iterations
-IterNum <- 1
+IterNum <- 4
 while (IterNum > 0) {
   
   # K-active: The number of active appliances
@@ -161,9 +164,9 @@ while (IterNum > 0) {
   # Sample theta
   for (k in 1:Kdag) {
     sigma_theta_p2 <- (1/sigma_theta^2 + 1/sigma_epsilon^2*sum(Z[,k]))^-1
-    sum1 <- Z[,k]*Y
-    sum2 <- matrix(Z[,-k]) %*% matrix(theta, nrow = 1)[,-k]
-    sum2 <- sum2*Z[,k]
+    sum1 <- sum(Z[,k]*Y)
+    sum2 <- matrix(Z[,-k], nrow = nrow(Z)) %*% matrix(theta, nrow = 1)[,-k]
+    sum2 <- t(matrix(Z[,k], nrow = nrow(Z)))%*%sum2
     mu_theta_g <- sigma_theta_p2*((mu_theta/sigma_theta^2) + (sum1-sum2)/sigma_epsilon^2)
     sigma_theta_g <- sqrt(sigma_theta_p2)
     theta[k] <- rnorm(1, mu_theta_g, sigma_theta_g)
@@ -171,7 +174,7 @@ while (IterNum > 0) {
   
   # Sample mu_k
   for (k in 1:(Kdag-1)) {
-    # Find lower and upper bounds
+    # Find lower and upper bounds 
     if (k == 1) {
       ubmu <- 1
     } else {
@@ -220,7 +223,7 @@ while (IterNum > 0) {
     ck10 <- cfun(1,0,k,Z)
     
     # Draw b_k
-    b[k] <- rbeta(1, ck11+gamma,ck10+1)
+    b[k] <- rbeta(1, ck11+gamma,ck10+delta+1)
   }
   
   
@@ -232,4 +235,5 @@ while (IterNum > 0) {
 # TODO: Why does theta need transpose in some cases?
 try(ts.plot(Z%*%t(theta)))
 try(ts.plot(Z%*%theta))
+ncol(Z)
 
