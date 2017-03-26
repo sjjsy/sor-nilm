@@ -164,9 +164,15 @@ while (IterNum > 0) {
   # Sample theta
   for (k in 1:Kdag) {
     sigma_theta_p2 <- (1/sigma_theta^2 + 1/sigma_epsilon^2*sum(Z[,k]))^-1
-    sum1 <- sum(Z[,k]*Y)
-    sum2 <- matrix(Z[,-k], nrow = nrow(Z)) %*% matrix(theta, nrow = 1)[,-k]
-    sum2 <- t(matrix(Z[,k], nrow = nrow(Z)))%*%sum2
+    sum1 <- Z[,k]%*%Y
+    thetadk <- theta[-k]
+    if (length(thetadk)==1){
+      sum2 <- Z[,-k] * thetadk
+    } else {
+      sum2 <- Z[,-k] %*% thetadk
+    }
+    
+    sum2 <- sum(sum2*Z[,k])
     mu_theta_g <- sigma_theta_p2*((mu_theta/sigma_theta^2) + (sum1-sum2)/sigma_epsilon^2)
     sigma_theta_g <- sqrt(sigma_theta_p2)
     theta[k] <- rnorm(1, mu_theta_g, sigma_theta_g)
