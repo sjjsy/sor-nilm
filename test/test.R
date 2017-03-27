@@ -6,14 +6,14 @@ source("../src/ffbs.R")
 file <- read.csv("test.csv")
 
 # Segment of file
-data <- file[1:500,]
+data <- file[6500:6400,]
 
 shifter <- function(x, n = 1) {
   if (n == 0) x else c(tail(x, -n), head(x, n))
 }
 
 # Observed data
-Y <- data$fridge + shifter(data$fridge, 9)*0.65
+Y <- data$aggregate
 
 # Real values of parameters
 theta.real <- matrix(c(1000,2000,500,200),1,4)
@@ -28,11 +28,11 @@ plot(Y, type = "l")
 # Hyperparameters
 # TODO: Conjugate priors for hyperparameters (hyperpriors)
 gamma <- 1 # b, beta distribution
-alpha <- 1 # mu, beta distribution, strength parameter of IBP
+alpha <- 3 # mu, beta distribution, strength parameter of IBP
 delta <- 1 # b, beta distribution
-mu_theta <- mean(Y, na.rm = T)*2
-sigma_epsilon <- sd(Y, na.rm = T)/2
-sigma_theta <- sd(Y, na.rm = T)/4
+mu_theta <- mean(Y, na.rm = T)
+sigma_epsilon <- sd(Y, na.rm = T)/8
+sigma_theta <- sd(Y, na.rm = T)
 
 # Parameters
 Kdag  <- 2 # Number of active appliances + 1
@@ -89,7 +89,7 @@ cfun <- function(i, j, k, Z) {
 
 # Iterative sampling for NFHMM ----
 # Number of iterations
-IterNum <- 4
+IterNum <- 10
 while (IterNum > 0) {
   
   # K-active: The number of active appliances
@@ -99,7 +99,10 @@ while (IterNum > 0) {
   Kdag <- max(which(colSums(Z) == 0))
   
   # Put mu in order
-  o.mu <- o.mu[order(o.mu, decreasing = T)]
+  order.mu <- order(o.mu, decreasing = T)
+  o.mu <- o.mu[order.mu]
+  b <- b[order.mu]
+  theta <- theta[order.mu]
   
   # Sample auxiliary variable s
   s <- runif(1, min = 0, max = o.mu[Kact])
@@ -118,9 +121,21 @@ while (IterNum > 0) {
     mu_k <- ars(1,fmuk,dfmuk,x=x,m=3,lb=T,xlb=0,ub=T,
                 xub=o.mu[length(o.mu)],alpha=alpha,t=nrow(Z))
     
-    # Pad mu_k to ordered mu
+    # Sample b_k and theta_k from their priors
+    b_k <- rbeta(1, gamma, delta)
+    theta_k <- rnorm(1, mu_theta, sigma_theta)
+    
+    # Pad sampled parameters to their vectors
     o.mu <- c(o.mu, mu_k)
-    o.mu <- o.mu[order(o.mu, decreasing = T)]
+    b <- c(b, b_k)
+    theta <- c(theta, theta_k)
+    
+    # Order parameter vectors according to mu
+    order.mu <- order(o.mu, decreasing = T)
+    o.mu <- o.mu[order.mu]
+    b <- b[order.mu]
+    theta <- theta[order.mu]
+    
     
     # Add empty column to Z
     Z <- cbind(Z, matrix(0, nrow(Z), 1))
@@ -130,10 +145,6 @@ while (IterNum > 0) {
     
     # Update K-dagger
     Kdag <- max(which(colSums(Z) == 0))
-    
-    # Sample b_k and theta_k from their priors
-    b <- c(b, rbeta(1, gamma, delta))
-    theta <- c(theta, rnorm(1, mu_theta, sigma_theta))
     
   }
   

@@ -5,8 +5,8 @@ C_Yt_Xt <- function(Y,Z,t,k,theta,sigma){
   z0[k] <- 0
   z1 <- z
   z1[k] <- 1
-  N0 <- dnorm(y,z0%*%t(theta),sigma)
-  N1 <- dnorm(y,z1%*%t(theta),sigma)
+  N0 <- dnorm(y,sum(z0*theta),sigma)
+  N1 <- dnorm(y,sum(z1*theta),sigma)
   N0 <- N0/(N0+N1)
   N1 <- 1-N0
   return(c(N0,N1))
