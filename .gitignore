@@ -1,4 +1,4 @@
 in/
 db/
 out/
-src/.Rhistory
+*.Rhistory
