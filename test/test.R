@@ -1,9 +1,9 @@
 # Load libraries
 library(ars)
-source("../src/ffbs.R")
-
+#source("../src/ffbs.R")
+#source("src/ffbs.R")
 # Read file ----
-file <- read.csv("test.csv")
+file <- read.csv("test/test.csv")
 
 # Segment of file
 data <- file[6500:6400,]
@@ -68,6 +68,15 @@ fmuk <- function(x, alpha, t, N=10) {
 dfmuk <- function(x, alpha, t, N=10) {
   return(alpha*((1-x)^N-1)/x - t/(1-x) + (alpha-1)/x)
 }
+# log-functions for new mu's (ARS)
+bmuk <- function(x,ck00,ck01){
+  h <- ck00*log(1-x)+(ck01-1)*log(x)
+  return(h)
+}
+dbmuk <- function(x,ck00,ck01){
+  dh <- -ck00/(1-x)+(ck01-1)/x
+  return(dh)
+}
 
 # Computation of c's
 cfun <- function(i, j, k, Z) {
@@ -89,7 +98,7 @@ cfun <- function(i, j, k, Z) {
 
 # Iterative sampling for NFHMM ----
 # Number of iterations
-IterNum <- 10
+IterNum <- 30
 while (IterNum > 0) {
   
   # K-active: The number of active appliances
@@ -207,20 +216,25 @@ while (IterNum > 0) {
     ck00 <- cfun(0,0,k,Z)
     ck01 <- cfun(0,1,k,Z)
     
+    # Draw mu_k
+    x <- seq(lbmu,ubmu,length.out = 5)
+    x <- x[-c(1,5)]
+    o.mu[k] <- ars(n=1,bmuk,dbmuk,x=x,m=3,lb=T,xlb=lbmu,ub=T,xub=ubmu,ck00=ck00,ck01=ck01)
+    
     # Draw mu_k using inverse grid sampling
-    bound <- seq(lbmu, ubmu, by = 0.0001)
-    dbound <- dbeta(bound,ck01,ck00+1)
-    dbound <- dbound/sum(dbound)
-    cbound <- cumsum(dbound)
-    u <- runif(1)
-    if (u <= cbound[1]) {
-      ind <- 1
-    } else if (u >= cbound[length(cbound)]) {
-      ind <- length(cbound)
-    } else {
-      ind <- min(which(cbound > u))
-    }
-    o.mu[k] <- bound[ind]
+    # bound <- seq(lbmu, ubmu, by = 0.0001)
+    # dbound <- dbeta(bound,ck01,ck00+1)
+    # dbound <- dbound/sum(dbound)
+    # cbound <- cumsum(dbound)
+    # u <- runif(1)
+    # if (u <= cbound[1]) {
+    #   ind <- 1
+    # } else if (u >= cbound[length(cbound)]) {
+    #   ind <- length(cbound)
+    # } else {
+    #   ind <- min(which(cbound > u))
+    # }
+    # o.mu[k] <- bound[ind]
   }
   
   # Sample mu_k for k = K-dagger (ARS)
