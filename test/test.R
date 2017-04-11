@@ -100,6 +100,25 @@ cfun <- function(i, j, k, Z) {
   return(c.val)
 }
 
+grid_sample_alpha <- function(mu,Kdag,lb=0,ub=5){
+  grid <- seq(lb,ub,by=0.001)
+  post <- rep(1,length(grid))
+  
+  for (i in 1:length(grid)){
+    for (k in 1:length(mu)) {
+      post[i] <- post[i]*dbeta(mu[k],grid[i]/Kdag,1)
+    }
+  }
+  
+  post <- post/sum(post)
+  cpost <- cumsum(post)
+  
+  u <- runif(1)
+  ind <- min(which(cpost > u))
+  return(grid[ind])
+  
+}
+
 # Iterative sampling for NFHMM ----
 # Number of iterations
 IterNum.total <- 10
@@ -265,6 +284,7 @@ while (IterNum > 0) {
   }
   
   # TODO: Sample hyperparameters from their posteriors (conjugacy)
+  alpha <- grid_sample_alpha(mu,Kdag)
   
   IterNum <- IterNum - 1
   
