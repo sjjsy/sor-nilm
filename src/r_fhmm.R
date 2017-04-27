@@ -7,7 +7,13 @@ source("src/ffbs.R")
 iter.plot <- T
 
 # Should negative appliances be allowed?
-allow.neg.thetas <- F
+negative.thetas <- F
+
+# Parameter for the sigma_epsilon heuristic
+# It might be worth experimenting with this parameter
+# if you get bad fit or experience other weird beheviour.
+# Warning: Setting this too low might cause errors.
+hp <- 40
 
 # Color palette by Paul Tol
 tol5 <- c("#1B9E77", "#66A61E", "#7570B3", "#D95F02", "#E6AB02", "#E7298A")
@@ -16,14 +22,14 @@ tol5 <- c("#1B9E77", "#66A61E", "#7570B3", "#D95F02", "#E6AB02", "#E7298A")
 file <- read.csv("test/test.csv")
 
 # Segment of file
-data <- file[6000:7400,]
+segment <- 6000:7400
+data <- file[segment,]
 
 # Observed data
 Y <- data$aggregate
 
 # Add noise
 Y <- abs(Y + rnorm(length(Y), 0, 10))
-nc <- 10
 
 # Real values of parameters
 theta.real <- c(1000,2000,500,200)
@@ -47,7 +53,7 @@ alpha <- 1
 gamma <- 1
 delta <- 1
 mu_theta <- mean(Y, na.rm = T)
-sigma_epsilon <- median(abs(diff(Y)))*nc
+sigma_epsilon <- median(abs(diff(Y)))*hp
 sigma_theta <- sd(Y, na.rm = T)
 
 # Parameters
@@ -170,7 +176,7 @@ while (IterNum > 0) {
     mu_theta_g <- sigma_theta_p2*((mu_theta/sigma_theta^2) + (sum1-sum2)/sigma_epsilon^2)
     sigma_theta_g <- sqrt(sigma_theta_p2)
     theta_cand <- rnorm(1, mu_theta_g, sigma_theta_g)
-    if (allow.neg.thetas == F) {
+    if (negative.thetas == F) {
       while (theta_cand < 0.05*mean(Y)) {
         theta_cand <- rnorm(1, mu_theta_g, sigma_theta)
       }
@@ -231,7 +237,7 @@ while (IterNum > 0) {
   
   # This is a temporary heuristic workaround for conjugacy
   m <- median(abs(diff(Y-Z%*%theta)))
-  sigma_epsilon <- abs(rnorm(1, m, 0.5*m))*nc
+  sigma_epsilon <- abs(rnorm(1, m, 0.5*m))*hp/Kact
   
   # Decrease iteration counter
   IterNum <- IterNum - 1
@@ -271,3 +277,12 @@ if (is.null(ncol(Z)) == F) {
     lines(Z[,k]*theta[k], type = "l", lty = 1, col = tol5[(k+1)%%6], lwd = 1.2)
   }
 }
+
+# Output result to .csv file
+output.table <- data.frame(matrix(NA, nrow(Z), ncol(Z)+1))
+colnames(output.table) <- c("TimeStamp", paste("Device", seq(1:ncol(Z))))
+output.table[,1] <- file$timestamp[segment]
+for (column in 2:ncol(output.table)) {
+  output.table[,column] <- Z[,column-1]*theta[column-1]
+}
+write.table(output.table, "out/output.csv", sep = ",", row.names = F)
