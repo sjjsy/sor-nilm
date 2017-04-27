@@ -5,19 +5,18 @@ source("src/ffbs.R")
 # Color palette by Paul Tol
 tol5 <- c("#1B9E77", "#66A61E", "#7570B3", "#D95F02", "#E6AB02", "#E7298A")
 
-
-
 # Read file ----
 file <- read.csv("test/test.csv")
 
 # Segment of file
+data <- file[6000:8400,]
 
-data <- file[6000:8300,]
 # Observed data
 Y <- data$aggregate
 
 # Add noise
-Y <- Y + rnorm(length(Y), 0, 20)
+Y <- abs(Y + rnorm(length(Y), 0, 10))
+nc <- 10
 
 # Real values of parameters
 theta.real <- c(1000,2000,500,200)
@@ -37,16 +36,15 @@ legend("topleft", c("Aggregate","Oven","Heater","Fridge","Light"),
 
 # Initialize NFHMM parameters ----
 # Hyperparameters
-# TODO: Conjugate priors for hyperparameters (hyperpriors)
-alpha <- 4
+alpha <- 1
 gamma <- 1
 delta <- 1
 mu_theta <- mean(Y, na.rm = T)
-sigma_epsilon <- 80#sd(Y, na.rm = T)/8
+sigma_epsilon <- median(abs(diff(Y)))*nc
 sigma_theta <- sd(Y, na.rm = T)
 
 # Parameters
-Kdag <- 2 # Number of active appliances + 1
+Kdag <- 4 # Number of active appliances + 1
 Z <- matrix(1, length(Y), (Kdag - 1)) # State matrix
 Z[sample(1:length(Y), round(0.3*length(Y))),1] <- 0 # Add some zeros
 Z <- cbind(Z, matrix(0, nrow(Z), 1)) # Add empty column
@@ -100,12 +98,13 @@ cfun <- function(i, j, k, Z) {
   return(c.val)
 }
 
-grid_sample_alpha <- function(mu,Kdag,lb=0,ub=5){
+grid_sample_alpha <- function(mu,Kdag,lb=1,ub=5) {
+  
   grid <- seq(lb,ub,by=0.001)
   post <- rep(1,length(grid))
   
-  for (i in 1:length(grid)){
-    for (k in 1:length(mu)) {
+  for (i in 1:length(grid)) {
+    for (k in 1:Kdag) {
       post[i] <- post[i]*dbeta(mu[k],grid[i]/Kdag,1)
     }
   }
@@ -115,17 +114,58 @@ grid_sample_alpha <- function(mu,Kdag,lb=0,ub=5){
   
   u <- runif(1)
   ind <- min(which(cpost > u))
+  #ind <- which.max(post) # Maximum likelihood method
   return(grid[ind])
+}
+
+grid_sample_gamma <- function(b,Kdag,delta,lb=0,ub=5) {
   
+  grid <- seq(lb,ub,by=0.001)
+  post <- rep(1,length(grid))
+  
+  for (i in 1:length(grid)) {
+    for (k in 1:Kdag) {
+      post[i] <- post[i]*dbeta(b[k],grid[i],delta)
+    }
+  }
+  
+  post <- post/sum(post)
+  cpost <- cumsum(post)
+  
+  u <- runif(1)
+  ind <- min(which(cpost > u))
+  #ind <- which.max(post) # Maximum likelihood method
+  return(grid[ind])
+}
+
+grid_sample_delta <- function(b,Kdag,gamma,lb=0,ub=5) {
+  
+  grid <- seq(lb,ub,by=0.001)
+  post <- rep(1,length(grid))
+  
+  for (i in 1:length(grid)) {
+    for (k in 1:Kdag) {
+      post[i] <- post[i]*dbeta(b[k],gamma,grid[i])
+    }
+  }
+  
+  post <- post/sum(post)
+  cpost <- cumsum(post)
+  
+  u <- runif(1)
+  ind <- min(which(cpost > u))
+  #ind <- which.max(post) # Maximum likelihood method
+  return(grid[ind])
 }
 
 # Iterative sampling for NFHMM ----
 # Number of iterations
-IterNum.total <- 10
+IterNum.total <- 100
 IterNum <- IterNum.total
 
 # Should each iteration be plotted?
-iter.plot <- T
+iter.plot <- F
+allow.neg.thetas <- T
 while (IterNum > 0) {
   # K-active: The number of active appliances
   # Active appliances
@@ -191,12 +231,7 @@ while (IterNum > 0) {
     Kdag <- max(which(colSums(Z) == 0))
     
     # Update K-star
-    K.b <- Kstar
     Kstar <- max(which(mu > s)) # TODO: Is this correct?
-    K.a <- Kstar
-    # if (K.a != K.b) {
-    #   print("ERRORRRRRRRRRRRRRRRR")
-    # }
   }
   
   # Sample Z with blocked Gibbs and run FFBS on each column of Z
@@ -235,7 +270,13 @@ while (IterNum > 0) {
     sum2 <- sum(sum2*Z[,k])
     mu_theta_g <- sigma_theta_p2*((mu_theta/sigma_theta^2) + (sum1-sum2)/sigma_epsilon^2)
     sigma_theta_g <- sqrt(sigma_theta_p2)
-    theta[k] <- rnorm(1, mu_theta_g, sigma_theta_g)
+    theta_cand <- rnorm(1, mu_theta_g, sigma_theta_g)
+    if (allow.neg.thetas == F) {
+      while (theta_cand < 0.05*mean(Y)) {
+        theta_cand <- rnorm(1, mu_theta_g, sigma_theta)
+      }
+    }
+    theta[k] <- theta_cand
   }
   
   # Sample mu_k
@@ -256,7 +297,7 @@ while (IterNum > 0) {
     ck00 <- cfun(0,0,k,Z)
     ck01 <- cfun(0,1,k,Z)
     
-    # Draw mu_k using inverse grid sampling
+    # Draw mu_k using ARS
     # Starting points for ARS
     sp <- seq(lb, ub, length.out = 15)
     sp <- sp[-c(1,15)]
@@ -283,9 +324,17 @@ while (IterNum > 0) {
     b[k] <- rbeta(1, ck11+gamma, ck10+delta+1)
   }
   
-  # TODO: Sample hyperparameters from their posteriors (conjugacy)
+  # TODO: Sample hyperparameters sigma_theta, mu_theta
+  # from their posteriors (conjugacy)
   alpha <- grid_sample_alpha(mu,Kdag)
+  gamma <- grid_sample_gamma(b,Kdag,delta)
+  delta <- grid_sample_delta(b,Kdag,gamma)
   
+  # This is a temporary heuristic workaround for conjugacy
+  m <- median(abs(diff(Y-Z%*%theta)))
+  sigma_epsilon <- abs(rnorm(1, m, 0.5*m))*nc
+  
+  # Decrease iteration counter
   IterNum <- IterNum - 1
   
   # Plot observed signal and its components for this iteration
@@ -293,8 +342,8 @@ while (IterNum > 0) {
     Z.i <- Z[,-Kdag]
     theta.i <- theta[-Kdag]
     
-    try(computed.aggregate <- Z.i*theta.i)
-    try(computed.aggregate <- Z.i%*%theta.i)
+    try(computed.aggregate <- Z.i*theta.i, silent = T)
+    try(computed.aggregate <- Z.i%*%theta.i, silent = T)
     plot(computed.aggregate, type = "l", ylab = "Power (W)", xlab = "Time (s)",
          ylim = c(min(min(computed.aggregate), min(theta.i)), max(max(computed.aggregate), max(theta.i))),
          col = tol5[1], main = paste(ncol(Z.i), "devices extracted")) 
@@ -302,9 +351,8 @@ while (IterNum > 0) {
       for (k in 1:ncol(Z.i)) {
         lines(Z.i[,k]*theta.i[k], type = "l", lty = 1, col = tol5[(k+1)%%6], lwd = 1.2)
       }
-    } 
+    }
   }
-  
 }
 
 # Return represenations to MIBP by removing inactive appliances
@@ -314,14 +362,13 @@ theta <- theta[-Kdag]
 print(paste("Retrieved", ncol(Z), "appliances."))
 
 # Plot observed signal and its components
-try(computed.aggregate <- Z*theta)
-try(computed.aggregate <- Z%*%theta)
+try(computed.aggregate <- Z*theta, silent = T)
+try(computed.aggregate <- Z%*%theta, silent = T)
 plot(computed.aggregate, type = "l", ylab = "Power (W)", xlab = "Time (s)",
      ylim = c(min(min(computed.aggregate), min(theta)), max(max(computed.aggregate), max(theta))),
-     col = tol5[1], main = paste(ncol(Z), "devices extracted")) 
+     col = tol5[1], main = paste(ncol(Z), "devices extracted"))
 if (is.null(ncol(Z)) == F) {
   for (k in 1:ncol(Z)) {
     lines(Z[,k]*theta[k], type = "l", lty = 1, col = tol5[(k+1)%%6], lwd = 1.2)
   }
 }
-
