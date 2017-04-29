@@ -68,8 +68,19 @@ negative.thetas <- F
 # Parameter for the sigma_epsilon heuristic
 # It might be worth experimenting with this parameter
 # if you get bad fit or experience other weird behaviour.
+# Noisier data benefits from a lower heuristic parameter
+# whereas data with low noise benefits from a higher one.
 # Warning: Setting this too low might cause errors.
-hp <- 40
+hp <- 10
+
+# The initial value for the number of active appliances in the data set.
+# This can be tuned if the user has some knowledge about the possible 
+# number of appliances. This is only the initial value, the algorithm
+# will still try to extract the most probable number of appliances.
+ina <- 4
+
+# Number of iterations
+IterNum.total <- 100
 
 ## Parse any CLI arguments ----
 args <- commandArgs(trailingOnly=TRUE)
@@ -124,8 +135,9 @@ if (mode.verbosity > 2) { print(data) }
 # Observed data
 Y <- data[,ncol(data)]
 
-# Add noise
-#Y <- abs(Y + rnorm(length(Y), 0, 10))
+## Add noise
+#epsilon <- rnorm(length(Y), 0, 10)
+#Y <- Y + abs(epsilon)
 
 # Real values of parameters
 theta.real <- c(1000,2000,500,200)
@@ -155,8 +167,14 @@ mu_theta <- mean(Y, na.rm = T)
 sigma_epsilon <- median(abs(diff(Y)))*hp
 sigma_theta <- sd(Y, na.rm = T)
 
+# Need to have at least some noise
+if (sigma_epsilon == 0) {
+  sigma_epsilon = 0.01*mean(Y) # "Noise" variance
+  epsilon = rep(0, length(Y))
+}
+
 # Parameters
-Kdag <- 4 # Number of active appliances + 1
+Kdag <- ina + 1 # Number of active appliances + 1
 Z <- matrix(1, length(Y), (Kdag - 1)) # State matrix
 Z[sample(1:length(Y), round(0.3*length(Y))),1] <- 0 # Add some zeros
 Z <- cbind(Z, matrix(0, nrow(Z), 1)) # Add empty column
@@ -167,8 +185,6 @@ b <- rbeta(Kdag, gamma, delta) # State transition probability
 theta <- rnorm(Kdag, mu_theta, sigma_theta) # State levels
 
 # Iterative sampling for NFHMM ----
-# Number of iterations
-IterNum.total <- 100
 IterNum <- IterNum.total
 pinfo(2, sprintf("Running %d sampling iterations over %d data points...", IterNum.total, length(Y)))
 #pinfo(2, sprintf("Running %d sampling iterations...", IterNum.total))
@@ -339,6 +355,12 @@ while (IterNum > 0) {
 
   # This is a temporary heuristic workaround for conjugacy
   m <- median(abs(diff(Y-Z%*%theta)))
+  
+  # Need to have at least some noise
+  if (m == 0) {
+    m = 0.01*mean(Y)
+  }
+  
   sigma_epsilon <- abs(rnorm(1, m, 0.5*m))*hp/Kact
 
   # Decrease iteration counter
@@ -401,6 +423,12 @@ for (column in 2:ncol(out.table)) {
   out.table[,column] <- Z[,column-1]*theta[column-1]
 }
 write.table(out.table, out.path, sep = ",", row.names = F)
+
+# Print the Mean Absolute Error
+print(mean(abs(Y-epsilon-Z%*%theta)))
+
+# Print the Mean Absolute Percentage Error
+print(mean(abs((Y-epsilon-Z%*%theta)/(Y-epsilon))))
 
 # Exit
 quit(save="no", status=0, runLast=FALSE)
