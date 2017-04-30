@@ -1,12 +1,15 @@
+#!/usr/bin/env Rscript
 # Load libraries
 library(ars)
 source("src/auxiliary.R")
 source("src/ffbs.R")
 
-"r_fhmm.R -- an R implementation of a non-parametric factorial hidden
-markov model for energy disaggregation.
+## Built-in help string ----
 
-Can be used interactively eg. with Rstudio or via the CLI.
+"r_fhmm.R -- an R implementation of a non-parametric factorial hidden markov
+model for non-intrusive energy disaggregation research.
+
+The script can be used interactively eg. with RStudio or via the CLI.
 
 The CLI interface works as follows:
 
@@ -18,11 +21,13 @@ The CLI interface works as follows:
     -s --segrange RANGE     specify input data segment range
     -o --out CSV_FILE       specify output file path
     -p --sehp VAL           specify sigma_epsilon heuristic parameter value [40]
+    -n --niter VAL          specify the number of iterations to run [100]
+    -a --ina VAL            specify the initial number of appliances [4]
     -q --quiet              print less info
     -v --verbose            print more info
 
   Example:
-    Rscript src/r_fhmm.R -b -i test/test.csv -o out/test.csv -s 6000:6200 -v
+    Rscript src/r_fhmm.R -b -i test/test.csv -o out/test.csv -s 6000:6199 -v
 
 Formats:
 
@@ -40,7 +45,8 @@ Happy disaggregating!
 ts.start <- as.numeric(Sys.time())
 pinfo <- function(verbosity, message) {
   if (verbosity <= mode.verbosity) {
-    cat(sprintf("I%s: %s\n", formatC((as.numeric(Sys.time()) - ts.start)*1000, format="d", width=7, flag="0"), message))
+    cat(sprintf("I%s: %s\n", formatC((as.numeric(Sys.time()) - ts.start)*1000,
+        format="d", width=7, flag="0"), message))
   }
 }
 
@@ -74,7 +80,7 @@ negative.thetas <- F
 hp <- 10
 
 # The initial value for the number of active appliances in the data set.
-# This can be tuned if the user has some knowledge about the possible 
+# This can be tuned if the user has some knowledge about the possible
 # number of appliances. This is only the initial value, the algorithm
 # will still try to extract the most probable number of appliances.
 ina <- 4
@@ -82,7 +88,11 @@ ina <- 4
 # Number of iterations
 IterNum.total <- 100
 
-## Parse any CLI arguments ----
+# Color palette by Paul Tol
+tol5 <- c("#1B9E77", "#66A61E", "#7570B3", "#D95F02", "#E6AB02", "#E7298A")
+
+## CLI argument parsing ----
+
 args <- commandArgs(trailingOnly=TRUE)
 i <- 1
 while (i <= length(args)) {
@@ -106,19 +116,28 @@ while (i <= length(args)) {
     out.path <- args[i]
   } else if ((arg == '-p') || (arg == '--sehp')) {
     i <- i + 1
-    hp <- args[i]
+    hp <- strtoi(args[i])
+  } else if ((arg == '-n') || (arg == '--niter')) {
+    i <- i + 1
+    IterNum.total <- strtoi(args[i])
+  } else if ((arg == '-a') || (arg == '--ina')) {
+    i <- i + 1
+    ina <- strtoi(args[i])
   } else if ((arg == '-q') || (arg == '--quiet')) {
     mode.verbosity <- mode.verbosity - 1
   } else if ((arg == '-v') || (arg == '--verbose')) {
     mode.verbosity <- mode.verbosity + 1
+  } else {
+    # Abort if any arguments remain unrecognized
+    cat(2, sprintf("Error: Invalid argument \"%s\"!", arg))
+    quit(save="no", status=1, runLast=FALSE)
   }
   i <- i + 1
 }
 
-# Color palette by Paul Tol
-tol5 <- c("#1B9E77", "#66A61E", "#7570B3", "#D95F02", "#E6AB02", "#E7298A")
+## Data input ----
 
-# Read the specified segment or all of the input file into `data` ----
+# Read the specified segment or all of the input file into `data`
 pinfo(2, sprintf("Reading input data from %s...", in.path))
 in.file <- read.csv(in.path)
 if (length(in.segment) > 1) {
@@ -126,16 +145,14 @@ if (length(in.segment) > 1) {
 } else {
   data <- in.file
 }
-# Duplicate the first row to ensure the output frame has the same number of rows
-#data <- rbind(data[1,], data[,])
 # Print info about the read data
 pinfo(2, sprintf("- Read a %dx%d matrix!", nrow(data), ncol(data)))
-if (mode.verbosity > 2) { print(data) }
+if (mode.verbosity > 2) { summary(data) }
 
 # Observed data
 Y <- data[,ncol(data)]
 
-## Add noise
+# Add noise
 #epsilon <- rnorm(length(Y), 0, 10)
 #Y <- Y + abs(epsilon)
 
@@ -158,7 +175,8 @@ if (mode.batch == F) {
          fill = c(tol5[1],tol5[2],tol5[3],tol5[4],tol5[5]))
 }
 
-# Initialize NFHMM parameters ----
+## Initialize NFHMM parameters ----
+
 # Hyperparameters
 alpha <- 1
 gamma <- 1
@@ -169,9 +187,9 @@ sigma_theta <- sd(Y, na.rm = T)
 
 # Need to have at least some noise
 if (sigma_epsilon == 0) {
-  sigma_epsilon = 0.01*mean(Y) # "Noise" variance
-  epsilon = rep(0, length(Y))
+  sigma_epsilon <- 0.01*mean(Y) # "Noise" variance
 }
+epsilon <- rep(0, length(Y))
 
 # Parameters
 Kdag <- ina + 1 # Number of active appliances + 1
@@ -184,11 +202,13 @@ mu <- mu[order(mu, decreasing = T)] # Order state trabsition probabilities
 b <- rbeta(Kdag, gamma, delta) # State transition probability
 theta <- rnorm(Kdag, mu_theta, sigma_theta) # State levels
 
-# Iterative sampling for NFHMM ----
-IterNum <- IterNum.total
-pinfo(2, sprintf("Running %d sampling iterations over %d data points...", IterNum.total, length(Y)))
-#pinfo(2, sprintf("Running %d sampling iterations...", IterNum.total))
+## Iterative sampling for NFHMM ----
+
+pinfo(2, sprintf("Running %d sampling iterations over %d data points...",
+    IterNum.total, length(Y)))
 ts.iter <- ts.start
+IterNum <- IterNum.total
+
 while (IterNum > 0) {
   # K-active: The number of active appliances
   # Active appliances
@@ -355,12 +375,12 @@ while (IterNum > 0) {
 
   # This is a temporary heuristic workaround for conjugacy
   m <- median(abs(diff(Y-Z%*%theta)))
-  
+
   # Need to have at least some noise
   if (m == 0) {
     m = 0.01*mean(Y)
   }
-  
+
   sigma_epsilon <- abs(rnorm(1, m, 0.5*m))*hp/Kact
 
   # Decrease iteration counter
@@ -392,15 +412,21 @@ while (IterNum > 0) {
   }
 }
 
-
 # Return represenations to MIBP by removing inactive appliances
 Z <- Z[,-Kdag]
 theta <- theta[-Kdag]
 
+## Print and/or plot some stats ----
+
+# Number of extracted appliances
 pinfo(1, sprintf("Iterative sampling finished: Retrieved %d appliances!", ncol(Z)))
+# Mean absolute error
+pinfo(2, sprintf("- MAE:   %.3f", mean(abs(Y-epsilon-Z%*%theta))))
+# Mean absolute percentage error
+pinfo(2, sprintf("- MAPE:  %.3f", mean(abs((Y-epsilon-Z%*%theta)/(Y-epsilon)))))
 
 if (mode.batch == F) {
-  # Plot observed signal and its components
+  # Plot observed signal and its components ----
   pinfo(2, sprintf("Plotting the results..."))
   try(computed.aggregate <- Z*theta, silent = T)
   try(computed.aggregate <- Z%*%theta, silent = T)
@@ -414,21 +440,16 @@ if (mode.batch == F) {
   }
 }
 
-# Output result to .csv file
+## Store results in the output file ----
+
 pinfo(2, sprintf("Writing results to %s...", out.path))
 out.table <- data.frame(matrix(NA, nrow(Z), ncol(Z)+1))
-colnames(out.table) <- c("Timestamp", paste("Appliance", seq(1:ncol(Z))))
+colnames(out.table) <- c("Timestamp", paste("App", seq(1:ncol(Z))))
 out.table[,1] <- data[,1] # Index
 for (column in 2:ncol(out.table)) {
   out.table[,column] <- Z[,column-1]*theta[column-1]
 }
 write.table(out.table, out.path, sep = ",", row.names = F)
-
-# Print the Mean Absolute Error
-print(mean(abs(Y-epsilon-Z%*%theta)))
-
-# Print the Mean Absolute Percentage Error
-print(mean(abs((Y-epsilon-Z%*%theta)/(Y-epsilon))))
 
 # Exit
 quit(save="no", status=0, runLast=FALSE)
