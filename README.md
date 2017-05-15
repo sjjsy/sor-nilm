@@ -7,7 +7,8 @@ Research (5 cr).
 
 This repository is associated with
 [a fork of the NILMTK available here](https://github.com/smarisa/nilmtk) which
-was also created and used by us in this course project.
+was also created and used by us in this course project. The README of that
+repository offers a little bit more insight on this code as well.
 
 The source code is at the ``src`` folder while the ``test`` folder contains
 some synthetic input data for testing. An ``out`` folder should be created to
