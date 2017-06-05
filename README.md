@@ -10,8 +10,8 @@ This repository is associated with
 was also created and used by us in this course project. The README of that
 repository offers a little bit more insight on this code as well.
 
-A [report](https://github.com/smarisa/sor-nilm/blob/master/doc/report.pdf) was
-written and [presentation slides](https://github.com/smarisa/sor-nilm/blob/master/doc/presentation.pdf)
+A [report](https://github.com/smarisa/sor-nilm/raw/master/doc/report.pdf) was
+written and [presentation slides](https://github.com/smarisa/sor-nilm/raw/master/doc/presentation.pdf)
 made according to the requirements of the course to communicate about the results
 of the project and these are available in the ``doc`` folder. Please inform us,
 if you build upon our work or find our work interesting!
